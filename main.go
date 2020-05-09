@@ -38,6 +38,8 @@ func run() {
 	}
 
 	err := cmd.Run()
+	defer cleanup()
+
 	if err != nil {
 		panic(err)
 	}
@@ -110,24 +112,25 @@ func child() {
 
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/cgroups.html
 func cg() error {
-	cgroups := "/sys/fs/cgroup"
-
-	mem := filepath.Join(cgroups, "memory", "simple_docker")
+	mem := cgroupMemName()
 	err := os.MkdirAll(mem, 0755)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(mem, "memory.limit_in_bytes"), []byte("999424"), 0700)
+	// memory limits
+	err = ioutil.WriteFile(filepath.Join(mem, "memory.limit_in_bytes"), []byte("2049000"), 0700)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(mem, "memory.memsw.limit_in_bytes"), []byte("999424"), 0700)
+	// memory + swap limits
+	err = ioutil.WriteFile(filepath.Join(mem, "memory.memsw.limit_in_bytes"), []byte("2049000"), 0700)
 	if err != nil {
 		return err
 	}
 
+	// call cgroup release_agent action when all process leaved the group
 	err = ioutil.WriteFile(filepath.Join(mem, "notify_on_release"), []byte("1"), 0700)
 	if err != nil {
 		return err
@@ -140,4 +143,16 @@ func cg() error {
 	}
 
 	return nil
+}
+
+func cleanup() {
+	err := os.RemoveAll(cgroupMemName())
+	if err != nil {
+		panic(err)
+	}
+}
+
+func cgroupMemName() string {
+	cgroups := "/sys/fs/cgroup"
+	return filepath.Join(cgroups, "memory", "simple_docker")
 }

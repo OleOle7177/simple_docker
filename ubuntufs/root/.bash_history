@@ -42,3 +42,19 @@ touch TMP_2
 ls
 ls -laF
 exit 
+ls -laF
+exit 
+ps
+ps -ea pid,rss,vsz
+ps -ea pid,rss
+ps -ea
+ps -eo
+ps -eo rss
+ps -eo pid,rss,vsz
+ps -eo pid,rss,vsz,args
+exit 
+ls -laF
+ps -eo pid,vsz,rss,args
+exit 
+sleep 100
+exit 
