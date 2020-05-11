@@ -38,7 +38,8 @@ func run() {
 	}
 
 	err := cmd.Run()
-	defer cleanup()
+	defer cleanupMem()
+	defer cleanupCPU()
 
 	if err != nil {
 		panic(err)
@@ -112,6 +113,23 @@ func child() {
 
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/cgroups.html
 func cg() error {
+
+	pid := strconv.Itoa(os.Getpid())
+
+	err := cgroupMem(pid)
+	if err != nil {
+		return err
+	}
+
+	err = cgroupCPU(pid)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func cgroupMem(pid string) error {
 	mem := cgroupMemName()
 	err := os.MkdirAll(mem, 0755)
 	if err != nil {
@@ -136,7 +154,6 @@ func cg() error {
 		return err
 	}
 
-	pid := strconv.Itoa(os.Getpid())
 	err = ioutil.WriteFile(filepath.Join(mem, "cgroup.procs"), []byte(pid), 0700)
 	if err != nil {
 		return err
@@ -145,8 +162,48 @@ func cg() error {
 	return nil
 }
 
-func cleanup() {
+func cgroupCPU(pid string) error {
+	cpu := cgroupCPUName()
+	err := os.MkdirAll(cpu, 0755)
+	if err != nil {
+		return err
+	}
+
+	// how often cpu will return to this task, microseconds
+	err = ioutil.WriteFile(filepath.Join(cpu, "cpu.cfs_period_us"), []byte("1000000"), 0700)
+	if err != nil {
+		return err
+	}
+
+	// how much time cpu will continue to work on this task, microseconds
+	err = ioutil.WriteFile(filepath.Join(cpu, "cpu.cfs_quota_us"), []byte("200000"), 0700)
+	if err != nil {
+		return err
+	}
+
+	// call cgroup release_agent action when all process leaved the group
+	err = ioutil.WriteFile(filepath.Join(cpu, "notify_on_release"), []byte("1"), 0700)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(filepath.Join(cpu, "cgroup.procs"), []byte(pid), 0700)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func cleanupMem() {
 	err := os.RemoveAll(cgroupMemName())
+	if err != nil {
+		panic(err)
+	}
+}
+
+func cleanupCPU() {
+	err := os.RemoveAll(cgroupCPUName())
 	if err != nil {
 		panic(err)
 	}
@@ -155,4 +212,9 @@ func cleanup() {
 func cgroupMemName() string {
 	cgroups := "/sys/fs/cgroup"
 	return filepath.Join(cgroups, "memory", "simple_docker")
+}
+
+func cgroupCPUName() string {
+	cgroups := "/sys/fs/cgroup"
+	return filepath.Join(cgroups, "cpu", "simple_docker")
 }

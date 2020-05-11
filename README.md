@@ -12,6 +12,11 @@ TODO:
   network (only container network interfaces),
   user ids (separate container users and groups),
   IPC (container could interact only with proccesses inside container)
+- cgroup for cpu (https://selectel.ru/blog/mexanizmy-kontejnerizacii-cgroups/)
 
 namespace: limits what container can see
 cgroups: limits resources
+
+write in README that based on cgroup v2, so kernel should be >
+
+# mount -t cgroup2 none $MOUNT_POINT

@@ -58,3 +58,11 @@ ps -eo pid,vsz,rss,args
 exit 
 sleep 100
 exit 
+whoami
+id -u
+exit
+exit 
+ls -laF
+exit 
+ps 
+exit 
