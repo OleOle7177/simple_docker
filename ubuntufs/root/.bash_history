@@ -66,3 +66,26 @@ ls -laF
 exit 
 ps 
 exit 
+ls -laF
+exit 
+ls -laF
+exit 
+exir 
+exit
+exit 
+ls -laF
+cd usr/bin/
+ls
+ls -laF
+ps
+cd ..
+cd /
+ps
+exit 
+echo 
+echo $PATH
+cd /usr/bin/
+ls -laF
+ls -laF | grep ps
+cd ..
+exit 
