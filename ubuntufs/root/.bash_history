@@ -89,3 +89,29 @@ ls -laF
 ls -laF | grep ps
 cd ..
 exit 
+ls -laF
+exit 
+ls -laF
+exit 
+ls -laF
+echo $PATH
+ls
+exit 
+sha1sum
+sha1sum 111
+man sha1sum
+sha1sum /dev/zero 
+sha1sum /dev/null
+ls -laF
+cd /
+ls
+cd dev/
+ls
+ls -laF
+cd ..
+1 > /dev/null
+echo "sss" > /dev/null
+while true; do true; done
+exit 
+while true; do true; done
+exit 

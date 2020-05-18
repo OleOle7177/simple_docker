@@ -14,9 +14,10 @@ import (
 )
 
 type ContainerParams struct {
-	CPU    float32
-	Memory int
-	Args   []string
+	CPUQuota    float32
+	CPUPeriodUs int
+	MemoryBytes int
+	Args        []string
 }
 
 func main() {
@@ -43,9 +44,10 @@ func main() {
 		Args:   cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			child(ContainerParams{
-				CPU:    cpu,
-				Memory: memory,
-				Args:   args,
+				CPUQuota:    cpu,
+				CPUPeriodUs: 100000,
+				MemoryBytes: memory,
+				Args:        args,
 			})
 		},
 	}
@@ -89,7 +91,7 @@ func child(params ContainerParams) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	err := cg(params.Memory, params.CPU)
+	err := cg(params.MemoryBytes, params.CPUPeriodUs, params.CPUQuota)
 	if err != nil {
 		panic(err)
 	}
@@ -146,7 +148,7 @@ func child(params ContainerParams) {
 }
 
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/cgroups.html
-func cg(memory int, cpu float32) error {
+func cg(memory int, cpuPeriodUs int, cpuQuota float32) error {
 	pid := strconv.Itoa(os.Getpid())
 
 	err := cgroupMem(pid, memory)
@@ -154,7 +156,7 @@ func cg(memory int, cpu float32) error {
 		return err
 	}
 
-	err = cgroupCPU(pid, cpu)
+	err = cgroupCPU(pid, cpuPeriodUs, cpuQuota)
 	if err != nil {
 		return err
 	}
@@ -198,7 +200,7 @@ func cgroupMem(pid string, memory int) error {
 }
 
 // https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/resource_management_guide/sec-cpu
-func cgroupCPU(pid string, quota float32) error {
+func cgroupCPU(pid string, periodUs int, quota float32) error {
 	cpu := cgroupCPUName()
 	err := os.MkdirAll(cpu, 0755)
 	if err != nil {
@@ -206,13 +208,14 @@ func cgroupCPU(pid string, quota float32) error {
 	}
 
 	// how often cpu will return to this task, microseconds
-	err = ioutil.WriteFile(filepath.Join(cpu, "cpu.cfs_period_us"), []byte("100000"), 0700)
+	err = ioutil.WriteFile(filepath.Join(cpu, "cpu.cfs_period_us"), []byte(strconv.Itoa(periodUs)), 0700)
 	if err != nil {
 		return err
 	}
 
 	// how much time cpu will continue to work on this task, microseconds
-	err = ioutil.WriteFile(filepath.Join(cpu, "cpu.cfs_quota_us"), []byte("200000"), 0700)
+	q := quota * float32(periodUs)
+	err = ioutil.WriteFile(filepath.Join(cpu, "cpu.cfs_quota_us"), []byte(strconv.Itoa(int(q))), 0700)
 	if err != nil {
 		return err
 	}
