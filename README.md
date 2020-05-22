@@ -6,13 +6,13 @@ TODO:
 - generate random containers uuid on start, create separate folder for each container
 - makefile to build binary
 - all namespaces:
-  UTS (hostname),
-  PID,
+  v - UTS (hostname),
+  v - PID,
   mounts,
   network (only container network interfaces),
   user ids (separate container users and groups),
   IPC (container could interact only with proccesses inside container)
-- cgroup for cpu (https://selectel.ru/blog/mexanizmy-kontejnerizacii-cgroups/)
+v - cgroup for cpu (https://selectel.ru/blog/mexanizmy-kontejnerizacii-cgroups/)
 
 namespace: limits what container can see
 cgroups: limits resources

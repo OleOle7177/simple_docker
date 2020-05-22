@@ -7,13 +7,21 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 )
 
+const (
+	cgroupsPath      = "/sys/fs/cgroup"
+	cgroupsNamespace = "simple_docker"
+)
+
 type ContainerParams struct {
+	ID          string
 	CPUQuota    float32
 	CPUPeriodUs int
 	MemoryBytes int
@@ -22,9 +30,9 @@ type ContainerParams struct {
 
 func main() {
 	var (
-		memory  int
-		cpu     float32
-		command string
+		memory int
+		cpu    float32
+		guid   string
 	)
 
 	cmdRun := &cobra.Command{
@@ -32,7 +40,6 @@ func main() {
 		Short: "Run launches command as a new isolated process",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(args)
 			run()
 		},
 	}
@@ -44,6 +51,7 @@ func main() {
 		Args:   cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			child(ContainerParams{
+				ID:          guid,
 				CPUQuota:    cpu,
 				CPUPeriodUs: 100000,
 				MemoryBytes: memory,
@@ -53,10 +61,10 @@ func main() {
 	}
 
 	rootCmd := &cobra.Command{}
-
-	rootCmd.PersistentFlags().StringVarP(&command, "command", "c", "", "command to run in container")
 	rootCmd.PersistentFlags().IntVar(&memory, "memory", 2049000, "limit process memory")
 	rootCmd.PersistentFlags().Float32Var(&cpu, "cpu", 0.5, "limit process cpu cores: max % usage (cpu cores quota in 100ms)")
+	cmdChild.PersistentFlags().StringVar(&guid, "id", "", "container id")
+
 	rootCmd.AddCommand(cmdRun, cmdChild)
 	rootCmd.Execute()
 }
@@ -64,7 +72,10 @@ func main() {
 // Create new namespaces and run child() command in it
 func run() {
 	// /proc/self/exe - is a self process
-	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
+	guid := strings.ReplaceAll(uuid.New().String(), "-", "")
+	args := []string{"child", "--id", guid}
+
+	cmd := exec.Command("/proc/self/exe", append(args, os.Args[2:]...)...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -74,12 +85,12 @@ func run() {
 	}
 
 	err := cmd.Run()
-	defer cleanupMem()
-	defer cleanupCPU()
-
 	if err != nil {
 		panic(err)
 	}
+
+	defer cleanup()
+	defer cleanupCg(guid)
 }
 
 // Сreate all namespaces, launch a command inside namespace
@@ -91,13 +102,13 @@ func child(params ContainerParams) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	err := cg(params.MemoryBytes, params.CPUPeriodUs, params.CPUQuota)
+	err := cg(params.ID, params.MemoryBytes, params.CPUPeriodUs, params.CPUQuota)
 	if err != nil {
 		panic(err)
 	}
 
 	// set hostname
-	err = unix.Sethostname([]byte("container"))
+	err = unix.Sethostname([]byte(params.ID))
 	if err != nil {
 		panic(err)
 	}
@@ -148,15 +159,15 @@ func child(params ContainerParams) {
 }
 
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/cgroups.html
-func cg(memory int, cpuPeriodUs int, cpuQuota float32) error {
+func cg(id string, memory int, cpuPeriodUs int, cpuQuota float32) error {
 	pid := strconv.Itoa(os.Getpid())
 
-	err := cgroupMem(pid, memory)
+	err := cgroupMem(id, pid, memory)
 	if err != nil {
 		return err
 	}
 
-	err = cgroupCPU(pid, cpuPeriodUs, cpuQuota)
+	err = cgroupCPU(id, pid, cpuPeriodUs, cpuQuota)
 	if err != nil {
 		return err
 	}
@@ -164,8 +175,8 @@ func cg(memory int, cpuPeriodUs int, cpuQuota float32) error {
 	return nil
 }
 
-func cgroupMem(pid string, memory int) error {
-	mem := cgroupMemName()
+func cgroupMem(id, pid string, memory int) error {
+	mem := genContainerCgroupPath(cgroupMemName(), id)
 	err := os.MkdirAll(mem, 0755)
 	if err != nil {
 		return err
@@ -200,8 +211,8 @@ func cgroupMem(pid string, memory int) error {
 }
 
 // https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/resource_management_guide/sec-cpu
-func cgroupCPU(pid string, periodUs int, quota float32) error {
-	cpu := cgroupCPUName()
+func cgroupCPU(id, pid string, periodUs int, quota float32) error {
+	cpu := genContainerCgroupPath(cgroupCPUName(), id)
 	err := os.MkdirAll(cpu, 0755)
 	if err != nil {
 		return err
@@ -226,6 +237,7 @@ func cgroupCPU(pid string, periodUs int, quota float32) error {
 		return err
 	}
 
+	// err = ioutil.WriteFile(filepath.Join(cpu, "cgroup.procs"), []byte(pid), 0700)
 	err = ioutil.WriteFile(filepath.Join(cpu, "cgroup.procs"), []byte(pid), 0700)
 	if err != nil {
 		return err
@@ -234,26 +246,68 @@ func cgroupCPU(pid string, periodUs int, quota float32) error {
 	return nil
 }
 
-func cleanupMem() {
-	err := os.RemoveAll(cgroupMemName())
+func cleanup() {
+	err := cleanIfEmpty(cgroupMemName())
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+	}
+
+	err = cleanIfEmpty(cgroupCPUName())
+	if err != nil {
+		fmt.Println(err)
 	}
 }
 
-func cleanupCPU() {
-	err := os.RemoveAll(cgroupCPUName())
+func cleanupCg(id string) {
+	cleanupMem(id)
+	cleanupCPU(id)
+}
+
+func cleanupMem(id string) {
+	fmt.Println(genContainerCgroupPath(cgroupMemName(), id))
+	err := os.RemoveAll(genContainerCgroupPath(cgroupMemName(), id))
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
+}
+
+func cleanupCPU(id string) {
+	fmt.Println(genContainerCgroupPath(cgroupCPUName(), id))
+	err := os.RemoveAll(genContainerCgroupPath(cgroupCPUName(), id))
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func cleanIfEmpty(path string) error {
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		if f.IsDir() {
+			fmt.Println(f.Name())
+			return nil
+		}
+	}
+
+	err = os.RemoveAll(path)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func cgroupMemName() string {
-	cgroups := "/sys/fs/cgroup"
-	return filepath.Join(cgroups, "memory", "simple_docker")
+	return filepath.Join(cgroupsPath, "memory", cgroupsNamespace)
 }
 
 func cgroupCPUName() string {
-	cgroups := "/sys/fs/cgroup"
-	return filepath.Join(cgroups, "cpu", "simple_docker")
+	return filepath.Join(cgroupsPath, "cpu", cgroupsNamespace)
+}
+
+func genContainerCgroupPath(path, id string) string {
+	return filepath.Join(path, id)
 }
