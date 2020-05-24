@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	cgroupsPath      = "/sys/fs/cgroup"
-	cgroupsNamespace = "simple_docker"
+	cgroupCPUPath = "/sys/fs/cgroup/cpu/simple_docker"
+	cgroupMemPath = "/sys/fs/cgroup/memory/simple_docker"
 )
 
 type ContainerParams struct {
@@ -89,8 +89,7 @@ func run() {
 		panic(err)
 	}
 
-	defer cleanup()
-	defer cleanupCg(guid)
+	defer cleanup(guid)
 }
 
 // Сreate all namespaces, launch a command inside namespace
@@ -176,7 +175,7 @@ func cg(id string, memory int, cpuPeriodUs int, cpuQuota float32) error {
 }
 
 func cgroupMem(id, pid string, memory int) error {
-	mem := genContainerCgroupPath(cgroupMemName(), id)
+	mem := filepath.Join(cgroupMemPath, id)
 	err := os.MkdirAll(mem, 0755)
 	if err != nil {
 		return err
@@ -212,7 +211,7 @@ func cgroupMem(id, pid string, memory int) error {
 
 // https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/resource_management_guide/sec-cpu
 func cgroupCPU(id, pid string, periodUs int, quota float32) error {
-	cpu := genContainerCgroupPath(cgroupCPUName(), id)
+	cpu := filepath.Join(cgroupCPUPath, id)
 	err := os.MkdirAll(cpu, 0755)
 	if err != nil {
 		return err
@@ -237,7 +236,6 @@ func cgroupCPU(id, pid string, periodUs int, quota float32) error {
 		return err
 	}
 
-	// err = ioutil.WriteFile(filepath.Join(cpu, "cgroup.procs"), []byte(pid), 0700)
 	err = ioutil.WriteFile(filepath.Join(cpu, "cgroup.procs"), []byte(pid), 0700)
 	if err != nil {
 		return err
@@ -246,34 +244,27 @@ func cgroupCPU(id, pid string, periodUs int, quota float32) error {
 	return nil
 }
 
-func cleanup() {
-	err := cleanIfEmpty(cgroupMemName())
+func cleanup(id string) {
+	cleanupCg(id)
+
+	err := cleanIfEmpty(cgroupCPUPath)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	err = cleanIfEmpty(cgroupCPUName())
+	err = cleanIfEmpty(cgroupMemPath)
 	if err != nil {
 		fmt.Println(err)
 	}
 }
 
 func cleanupCg(id string) {
-	cleanupMem(id)
-	cleanupCPU(id)
-}
-
-func cleanupMem(id string) {
-	fmt.Println(genContainerCgroupPath(cgroupMemName(), id))
-	err := os.RemoveAll(genContainerCgroupPath(cgroupMemName(), id))
+	err := os.RemoveAll(filepath.Join(cgroupMemPath, id))
 	if err != nil {
 		fmt.Println(err)
 	}
-}
 
-func cleanupCPU(id string) {
-	fmt.Println(genContainerCgroupPath(cgroupCPUName(), id))
-	err := os.RemoveAll(genContainerCgroupPath(cgroupCPUName(), id))
+	err = os.RemoveAll(filepath.Join(cgroupCPUPath, id))
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -298,16 +289,4 @@ func cleanIfEmpty(path string) error {
 	}
 
 	return nil
-}
-
-func cgroupMemName() string {
-	return filepath.Join(cgroupsPath, "memory", cgroupsNamespace)
-}
-
-func cgroupCPUName() string {
-	return filepath.Join(cgroupsPath, "cpu", cgroupsNamespace)
-}
-
-func genContainerCgroupPath(path, id string) string {
-	return filepath.Join(path, id)
 }
