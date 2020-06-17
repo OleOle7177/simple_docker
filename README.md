@@ -23,3 +23,12 @@ write in README that based on cgroup v2, so kernel should be >
 # mount -t cgroup2 none $MOUNT_POINT
 
 https://simpledocker.s3.eu-central-1.amazonaws.com/ubuntu_18_04.tar.gz
+
+
+Copy ubuntu filesystem:
+https://unix.stackexchange.com/questions/96523/how-can-a-filesystem-be-copied-exactly-as-is
+
+Problems with tar:
+https://github.com/docker/hub-feedback/issues/727
+
+https://askubuntu.com/questions/1049930/how-to-copy-root-file-system-in-ubuntu

@@ -20,6 +20,7 @@ const (
 	cgroupMemPath = "/sys/fs/cgroup/memory/simple_docker"
 )
 
+// ContainerParams represents params for container to launch
 type ContainerParams struct {
 	ID          string
 	CPUQuota    float32
@@ -61,7 +62,7 @@ func main() {
 	}
 
 	rootCmd := &cobra.Command{}
-	rootCmd.PersistentFlags().IntVar(&memory, "memory", 2049000, "limit process memory")
+	rootCmd.PersistentFlags().IntVar(&memory, "memory", 40000000, "limit process memory")
 	rootCmd.PersistentFlags().Float32Var(&cpu, "cpu", 0.5, "limit process cpu cores: max % usage (cpu cores quota in 100ms)")
 	cmdChild.PersistentFlags().StringVar(&guid, "id", "", "container id")
 
@@ -112,12 +113,27 @@ func child(params ContainerParams) {
 		panic(err)
 	}
 
+	// TODO: cant copy files to that directory
+	containerRoot := filepath.Join("./containers", params.ID)
+	err = os.Mkdir(containerRoot, 4755)
+	if err != nil {
+		panic(err)
+	}
+
+	copyCmd := exec.Command("rsync", "-raAXv", "--links", "./images/ubuntu_18_04/rootfs/", containerRoot)
+
+	out, err := copyCmd.CombinedOutput()
+	fmt.Println(string(out[:]))
+
+	ls := exec.Command("ls -laF")
+	ls.Run()
 	// set root directory and limit access to directory tree
-	err = unix.Chroot("./ubuntufs")
+	err = unix.Chroot(containerRoot)
 	if err != nil {
 		panic(err)
 	}
 	os.Chdir("/")
+	fmt.Println("we are here")
 
 	// mount proc namespace
 	err = unix.Mount("proc", "/proc", "proc", 0, "")
