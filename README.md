@@ -1,34 +1,42 @@
-`sudo go run main.go run /bin/bash`
+# Simple docker
 
-TODO:
-v - finish o'reilly course
-- create ubuntufs image and pack it to tgz, download and unpack on launch
-+- - generate random containers uuid on start, create separate folder for each container
-- makefile to build binary
-- all namespaces:
-  v - UTS (hostname),
-  v - PID,
-  mounts,
-  network (only container network interfaces),
-  user ids (separate container users and groups),
-  IPC (container could interact only with proccesses inside container)
-v - cgroup for cpu (https://selectel.ru/blog/mexanizmy-kontejnerizacii-cgroups/)
-  - check existing images on start, download if not exists, unpack to separate folder
+This project is just a fun attempt to create a docker analogue in one file: a tool to run isolated processes with restricted resources.
 
-namespace: limits what container can see
-cgroups: limits resources
+## Build
+Use `make` to build project, download ubuntu 18.04 image (~58M) and untar it.
 
-write in README that based on cgroup v2, so kernel should be >
+`make clean` to delete all artefacts.
 
-# mount -t cgroup2 none $MOUNT_POINT
+## Run
+`sudo ./simple_docker run --cpu 0.1 --memory 50000000 -- /bin/bash`
 
-https://simpledocker.s3.eu-central-1.amazonaws.com/ubuntu_18_04.tar.gz
+Learn more about parameters with `--help` flag:
+`sudo ./simple_docker run --help`
 
+## Limitations
+- Can be launched only on linux (as real docker). Tested on Ubuntu 18.04.
+- Can be used only as root user because of cgroups v1.
+- Some namespaces are not present.
 
-Copy ubuntu filesystem:
-https://unix.stackexchange.com/questions/96523/how-can-a-filesystem-be-copied-exactly-as-is
+## Short Description
 
-Problems with tar:
-https://github.com/docker/hub-feedback/issues/727
+Original Docker based on 2 linux kernel features: namespaces (for process isolation) and cgroups (for resource restrictions).
 
-https://askubuntu.com/questions/1049930/how-to-copy-root-file-system-in-ubuntu
+#### Namespaces
+There are 6 namespaces, they are created with syscalls. So the idea is to create namespaces and launch a process inside them. Namespaces:
+- Unix Timesharing System (namespace has its own hostname),
+- process IDs,
+- mounts,
+- network (namespace has its own network interfaces),
+- user IDs,
+- IPC (processes inside namespace can interact only with processes inside that namespace).
+
+Network, user IDs and IPC are not implemented here yet.
+
+#### Cgroups
+Cgroups is a linux kernel feature to group processes and assign properties to that groups. Resource limitation is just a one particular case of such properties.
+Here we use cpu and memory cgroups of v1 (https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/cgroups.html).
+
+To read more on cgroups v2 features and motivations: https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html.
+
+Why v1 here? Because currently it's a default cgroups version to use in ubuntu systems.

@@ -72,10 +72,11 @@ func main() {
 
 // Create new namespaces and run child() command in it
 func run() {
-	// /proc/self/exe - is a self process
+	// generate container id
 	guid := strings.ReplaceAll(uuid.New().String(), "-", "")
 	args := []string{"child", "--id", guid}
 
+	// /proc/self/exe - is a self process
 	cmd := exec.Command("/proc/self/exe", append(args, os.Args[2:]...)...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -113,7 +114,6 @@ func child(params ContainerParams) {
 		panic(err)
 	}
 
-	// TODO: cant copy files to that directory
 	containerRoot := filepath.Join("./containers", params.ID)
 	err = os.Mkdir(containerRoot, 4755)
 	if err != nil {
@@ -121,19 +121,18 @@ func child(params ContainerParams) {
 	}
 
 	copyCmd := exec.Command("rsync", "-raAXv", "--links", "./images/ubuntu_18_04/rootfs/", containerRoot)
-
 	out, err := copyCmd.CombinedOutput()
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println(string(out[:]))
 
-	ls := exec.Command("ls -laF")
-	ls.Run()
 	// set root directory and limit access to directory tree
 	err = unix.Chroot(containerRoot)
 	if err != nil {
 		panic(err)
 	}
 	os.Chdir("/")
-	fmt.Println("we are here")
 
 	// mount proc namespace
 	err = unix.Mount("proc", "/proc", "proc", 0, "")
