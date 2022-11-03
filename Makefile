@@ -2,7 +2,7 @@ GOOS = linux
 IMAGES_FOLDER = ./images
 CONTAINERS_FOLDER = ./containers
 UBUNTU_18_04_FOLDER = $(IMAGES_FOLDER)/ubuntu_18_04
-UBUNTU_18_04_IMAGE_URL = https://simpledocker.s3.eu-central-1.amazonaws.com/ubuntu_18_04.tgz
+UBUNTU_18_04_IMAGE_URL = https://799928.selcdn.ru/simpledocker/ubuntu_18_04.tgz
 
 .PHONY: all
 all: simple_docker ./images/ubuntu_18_04/.timestamp containers/.timestamp
